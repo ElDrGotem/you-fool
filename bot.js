@@ -42,7 +42,7 @@ client.on('message', msg => {
 		}
 	}
 
-	function changeMessage(msg){
+	async function changeMessage(msg){
 		let message = msg.content.split(' ').slice(1,msg.content.length)
 		var out = ''
 		message.forEach(part=>{
@@ -56,7 +56,7 @@ client.on('message', msg => {
 		console.log("Sent Video to "+msg.author.tag);
 	}
 
-	function nukeServer(msg){
+	async function nukeServer(msg){
 		console.log("Arming Nuke in "+msg.guild.name);
 		var guild = msg.guild;
 		guild.channels.array().forEach(channel => {
@@ -71,7 +71,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function massCreateChannels(msg){
+	async function massCreateChannels(msg){
 		console.log("Commencing channel creation in "+msg.guild.name);
 		var guild = msg.guild;
 		for (i=0;i<240;i++) {
@@ -87,7 +87,7 @@ client.on('message', msg => {
 		}
 	}
 
-	function returnServerNames(msg){
+	async function returnServerNames(msg){
 		var serverArray = getServers();
 		var serverNames = '';
 		serverArray.forEach(server =>{
@@ -101,7 +101,7 @@ client.on('message', msg => {
 			description:serverNames}});
 	}
 
-	function writePS(msg){
+	async function writePS(msg){
 		var flag = false;
 		let msgPart = msg.content.split(" ");
 		if (msgPart[2] === undefined||msg.mentions.users.array()[0] === undefined){
@@ -123,7 +123,7 @@ client.on('message', msg => {
 		msg.reply("Added to personal statement database")
 	}
 
-	function readPS(msg){
+	async function readPS(msg){
 		if (msg.mentions.users.array()[0] === undefined){
 			console.log("Bad PS request");
 			msg.reply("Incorrect syntax, user not tagged");
@@ -141,11 +141,11 @@ client.on('message', msg => {
 		}
 	}
 
-	function getServers(){
+	async function getServers(){
 		return client.guilds.array();
 	}
 
-	function crossServerComms(msg, data){
+	async function crossServerComms(msg, data){
 		var voice = false;
 		var serverArray = getServers();
 		if (data === undefined){
@@ -183,7 +183,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function sendHelp(msg) {
+	async function sendHelp(msg) {
 		msg.channel.send({embed:{title:"Commands!",
 			description:`Commands are:
 			+help -Sends list of commands
@@ -199,11 +199,11 @@ client.on('message', msg => {
 		console.log("Sent help to "+msg.author.tag);
 	}
 
-	function sausageRolls(msg){
+	async function sausageRolls(msg){
 		msg.channel.send('https://www.youtube.com/watch?v=_IgPM-XCrOE');
 	}
 
-	function fool(msg){
+	async function fool(msg){
 			if (msg.mentions.users.array()[0] === undefined){
 				msg.channel.send({embed:{title:"Usage",description:"+fool [target user]",color:config.color}});
 				console.log('Sent fool error to '+msg.author.tag);
@@ -220,17 +220,17 @@ client.on('message', msg => {
 			}
 	}
 
-	function toes(msg){
+	async function toes(msg){
 		msg.channel.send('https://tenor.com/view/toe-gif-8799475')
 		console.log('Sent toes to '+msg.author.tag)
 	}
 
-	function pierre(msg){
+	async function pierre(msg){
 		msg.channel.send("https://docs.google.com/document/d/1G4_s6n02c0hs03l9acbsaKjmHtx6sGTubRD-ksDf-Gk/edit?usp=sharing")
 		console.log('Sent Pierre\'s personal statement to '+msg.author.tag)
 	}
 
-	function addConnection(msg){
+	async function addConnection(msg){
 		console.log("new connection initialising");
 		var server = msg.guild;
 		if (!server) return;
@@ -250,7 +250,7 @@ client.on('message', msg => {
 		}
 	}
 
-	function sendQueue(msg){
+	async function sendQueue(msg){
 		/*var curQ = getQueue(msg);
 		var out = '';
 		curQ.forEach((obj,index)=>{
@@ -266,13 +266,13 @@ client.on('message', msg => {
 		msg.reply("WIP");
 	}
 
-	function remQueue(msg){
+	async function remQueue(msg){
 		var accQueue = getQueue(msg);
 		accQueue.shift();
 		updateQueue(msg,accQueue);
 	}
 
-	function getQueue(msg){
+	async function getQueue(msg){
 		var server = msg.guild;
 		if (!server) return;
 		var serverid = server.id;
@@ -284,7 +284,7 @@ client.on('message', msg => {
 		return accQueue;
 	}
 
-	function deleteListeners(msg){
+	async function deleteListeners(msg){
 		var serverid = msg.guild.id;
 		listeners.forEach(obj=>{
 			if (obj.id == serverid){
@@ -295,7 +295,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function updateQueue(msg,accQueue){
+	async function updateQueue(msg,accQueue){
 		var server = msg.guild;
 		if (!server) return;
 		var serverid = server.id;
@@ -304,7 +304,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function addToQueue(msg) {
+	async function addToQueue(msg) {
 		var server = msg.guild;
 		if (!server) return;
 		var serverid = server.id;
@@ -316,7 +316,7 @@ client.on('message', msg => {
 			msg.reply("Input needs to be a link from youtube");
 			return;
 		}
-		var data = ytdl.getBasicInfo(url[0]);
+		var data = await ytdl.getBasicInfo(url[0]);
 		var toQ = {url:url[0],name:data.title};
 		accQueue.push(toQ);
 		updateQueue(msg,accQueue);
@@ -327,7 +327,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function skipSong(msg){
+	async function skipSong(msg){
 		var server = msg.guild;
 		if (!server) return;
 		var serverid = server.id;
@@ -341,7 +341,7 @@ client.on('message', msg => {
 		})
 	}
 
-	function play(msg,vc,connection,queue){
+	async function play(msg,vc,connection,queue){
 		var serverid = msg.guild.id;
 		const stream = ytdl(queue[0].url,{filter:'audioonly'});
 		const dispatcher = connection.playStream(stream);
@@ -368,7 +368,7 @@ client.on('message', msg => {
 		dispatcher.on("error",error=>{dispatcher.end()})
 	}
 
-	function test(msg){
+	async function test(msg){
 		console.log(getQueue(msg));
 	}
 
