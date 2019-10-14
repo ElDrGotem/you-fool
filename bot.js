@@ -8,7 +8,7 @@ var listeners = [];
 //const ytdl = require('ytdl-core');
 //const $ = require('jQuery');
 
-client.on('ready', () => {
+async client.on('ready', () => {
 	console.log(`Logged in as ${client.user.tag}!`);
 	console.log(`Available in ${client.guilds.array().length} servers!`);
 	var guilds = client.guilds.array();
@@ -20,7 +20,7 @@ client.on('ready', () => {
     client.user.setActivity("+help")
 });
 
-client.on('message', msg => {
+async client.on('message', msg => {
 	function checkFooled(msg,min,max,foolid,foolname) {
 		if (foolid === undefined) {
 			foolid = msg.author.id;
