@@ -3,8 +3,10 @@ const config = require("./config.json");
 const client = new Discord.Client();
 const fs = require("fs");
 const ytdl = require("ytdl-core");
-var vqueue = [];
-var listeners = [];
+const yt =require("youtube-node");
+var youtube = new yt();
+youtube.setKey(config.YT_API_KEY);
+var serverData = [];
 //const ytdl = require('ytdl-core');
 //const $ = require('jQuery');
 
@@ -14,8 +16,7 @@ client.on('ready', () => {
 	var guilds = client.guilds.array();
 	guilds.forEach(guild =>{
 		console.log('    '+guild.name);
-		vqueue.push({id:guild.id,queue:[]})
-		listeners.push({id:guild.id,vc:null,connection:null,dispatcher:null})
+		serverData.push({id:guild.id,vc:null,connection:null,dispatcher:null,queue:[],loop:false})
 	});
     client.user.setActivity("+help")
 });
@@ -192,7 +193,8 @@ function sendHelp(msg) {
 		+pierre -While choosing what subjects to do at A-level, I hadn't once considered taking Psychology
 		+servers -Returns the list of servers
 		+toes -toes
-		+play -plays a song from a youtube link`,
+		+play -plays a song from a youtube link
+		+loop -loops the currently playing song`,
 		color:config.color,
 		footer:{text:"Requested by "+msg.author.tag,
 			icon_url:msg.author.avatarURL}}});
@@ -238,7 +240,7 @@ function addConnection(msg){
 	var vc = msg.member.voiceChannel;
 	if (vc){
 		vc.join().then(connection=>{
-			listeners.forEach(obj=>{
+			serverData.forEach(obj=>{
 				if (obj.id==serverid){
 					obj.vc = vc;
 					obj.connection = connection;
@@ -295,7 +297,7 @@ function getQueue(msg){
 	var server = msg.guild;
 	if (!server) return;
 	var serverid = server.id;
-	vqueue.forEach(obj=>{
+	serverData.forEach(obj=>{
 		if (obj.id == serverid){
 			accQueue=obj.queue;
 		};
@@ -305,7 +307,7 @@ function getQueue(msg){
 
 function deleteListeners(msg){
 	var serverid = msg.guild.id;
-	listeners.forEach(obj=>{
+	serverData.forEach(obj=>{
 		if (obj.id == serverid){
 			obj.dispatcher=null;
 			obj.vc=null;
@@ -318,7 +320,7 @@ function updateQueue(msg,accQueue){
 	var server = msg.guild;
 	if (!server) return;
 	var serverid = server.id;
-	vqueue.forEach(obj=>{
+	serverData.forEach(obj=>{
 		if (obj.id == serverid) obj.queue=accQueue;
 	})
 }
@@ -339,7 +341,7 @@ async function addToQueue(msg) {
 	var toQ = {url:url[0],name:data.title};
 	accQueue.push(toQ);
 	updateQueue(msg,accQueue);
-	listeners.forEach(obj=>{
+	serverData.forEach(obj=>{
 		if (obj.id == serverid){
 			if (obj.vc == null){addConnection(msg)}
 		}
@@ -350,29 +352,55 @@ function skipSong(msg){
 	var server = msg.guild;
 	if (!server) return;
 	var serverid = server.id;
-	listeners.forEach(obj=>{
+	serverData.forEach(obj=>{
 		if (obj.id == serverid){
-			if (!obj.dispatcher) break;
+			if (!obj.dispatcher) return;
 			else{
-				obj.dispatcher.end()
+				loop(msg,false);
+				obj.dispatcher.end();
 			}
 		}
-	})
+	});
+}
+
+function loop(msg,override){
+	var server = msg.guild;
+	if (!server) return;
+	serverData.forEach(obj=>{
+		if (obj.id == server.id){
+			if (override === undefined){
+				override = (!obj.loop);
+			}
+			obj.loop = override;
+		}
+	});
+	if (override===true){
+		msg.reply("Loop enabled")
+	}
+	else{
+		msg.reply("Loop disabled")
+	}
 }
 
 function play(msg,vc,connection,queue){
 	var serverid = msg.guild.id;
 	const stream = ytdl(queue[0].url,{filter:'audioonly'});
 	const dispatcher = connection.playStream(stream);
-	listeners.forEach(obj=> {
+	serverData.forEach(obj=> {
 		if (obj.id == serverid) {
 			obj.dispatcher = dispatcher;
 		}
 	});
 	dispatcher.on("end", end => {
-		remQueue(msg);
+		var loop = false;
+		serverData.forEach(obj=>{
+			if (serverid == obj.id){
+				loop = obj.loop;
+			}
+		});
+		if (!loop) remQueue(msg);
 		newQ = getQueue(msg);
-		listeners.forEach(obj=> {
+		serverData.forEach(obj=> {
 			if (obj.id == serverid) {
 				obj.dispatcher = null;
 			}
@@ -387,8 +415,15 @@ function play(msg,vc,connection,queue){
 	dispatcher.on("error",error=>{dispatcher.end()})
 }
 
-function test(msg){
-	console.log(getQueue(msg));
+async function test(msg){
+	var out = ''
+	serverData.forEach(obj=>{
+		if (obj.id==msg.guild.id){
+			out = obj;
+		}
+	});
+	console.log(out);
+	console.log(await youtube.search("tobuscus diamond sword song",2,(error,result)=>{console.log(error);console.log(result.items[0])}));
 }
 
 client.on('message', msg => {
@@ -415,7 +450,8 @@ client.on('message', msg => {
 		"+ps":readPS,
 		"+queue":sendQueue,
 		"+test":test,
-		"+skip":skipSong
+		"+skip":skipSong,
+		"+loop":loop
 	}
 	if (!msg.author.bot) {
 		crossServerComms(spy,msg);
