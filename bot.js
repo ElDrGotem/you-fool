@@ -288,10 +288,11 @@ function getQueue(msg){
 	return serverData[serverid].queue;
 }
 
-function deleteListeners(msg){
-	var serverid = msg.guild.id;
-	server = serverData[serverid];
+function deleteListeners(guildid){
+	let server = serverData[guildid];
 	server.dispatcher = server.vc = server.connection = null;
+	server.queue = [];
+	server.loop = false;
 }
 
 function updateQueue(msg,accQueue){
@@ -308,7 +309,6 @@ function getURL(msg){
 	urlString.shift()
 	inp=''
 	urlString.forEach(part=>{inp+=`${part} `})
-	console.log(inp)
 	youtube.search(inp,1,(error,content) =>{
 		if (error) msg.reply("An error has occured, input must refer to a youtube video");
 		else{
@@ -319,7 +319,7 @@ function getURL(msg){
 			else {
 				searchResult=`https://www.youtube.com/watch?v=${content.items[0]["id"].videoId}`;
 				addToQueue(searchResult,msg)
-			}
+			}//
 		}
 	})
 }
@@ -328,25 +328,36 @@ async function addToQueue(url,msg) {
 	let server = msg.guild
 	let serverid = server.id;
 	let accQueue = getQueue(msg);
-	console.log(url)
 	var data = await ytdl.getBasicInfo(url);
 	var toQ = {url:url,name:data.title};
 	accQueue.push(toQ);
+	msg.channel.send({
+		embed: {
+			title: `Added ${data.title} to the queue`,
+			description: `Number ${accQueue.length} in queue`,
+			color: config.color,
+			footer: {
+				text: "Requested by " + msg.author.tag,
+				icon_url: msg.author.avatarURL
+			}
+		}
+	});
 	updateQueue(msg,accQueue);
 	if(serverData[serverid].vc === null) addConnection(msg);
 }
 
 function skipSong(msg){
 	var msgServer = msg.guild;
-	if (!server) return;
+	if (!msgServer) return;
 	var serverid = msgServer.id;
 	var server = serverData[serverid];
 	if (!server.dispatcher) return;
-	loop(msg, false);
+	loop(msg, false,true);
+	console.log("ending dispatcher")
 	server.dispatcher.end();
 }
 
-function loop(msg,override){
+function loop(msg,override,quiet){
 	var msgserver = msg.guild;
 	if (!msgserver) return;
 	server = serverData[msgserver.id];
@@ -354,18 +365,26 @@ function loop(msg,override){
 		override = (!server.loop);
 	}
 	server.loop = override;
-	if (override===true){
-		msg.reply("Loop enabled")
-	}
-	else{
-		msg.reply("Loop disabled")
+	if (!quiet){
+		if (override===true){
+			msg.reply("Loop enabled")
+		}
+		else{
+			msg.reply("Loop disabled")
+		}
 	}
 }
 
-function play(msg,vc,connection,queue){
+function checkInVC(user){
+	if (user.user.id==config.BOT_ID){
+		if (!user.voiceChannelID) deleteListeners(user.guild.id)
+	}
+}
+
+async function play(msg,vc,connection,queue){
 	var serverid = msg.guild.id;
-	const stream = ytdl(queue[0].url,{filter:'audioonly'});
-	const dispatcher = connection.playStream(stream);
+	const stream = await ytdl(queue[0].url,{filter:'audioonly'});
+	const dispatcher = await connection.playStream(stream);
 	var server = serverData[serverid];
 	server.dispatcher = dispatcher;
 	dispatcher.on("end", end => {
@@ -377,7 +396,7 @@ function play(msg,vc,connection,queue){
 		if (newQ.length>0) play(msg,vc,connection,newQ);
 		else {
 			vc.leave();
-			deleteListeners(msg);
+			deleteListeners(msg.guild.id);
 		}
 		console.log("  Play succesful, leaving")
 	});
@@ -386,18 +405,15 @@ function play(msg,vc,connection,queue){
 
 async function test(msg){
 	var out = ''
-	var server = serverData[msg.guild.id];
-	out = server
-	//console.log(out);
- 	getURL(`tobuscus diamond sword song`);
+	console.log(serverData[msg.guild.id])
 }
 
 client.on('message', msg => {
 	if (msg.channel.guild === undefined) {
-		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From:** Bot DM**)' + " PROSHANTO LOOL";
+		var spy = `+csc ${config.espionage} ${msg.content} (From:** Bot DM**)`;
 	}
 	else{
-		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From **' + msg.channel.guild.name + '**)' + ' proshanto';
+		var spy =`+csc ${config.espionage} ${msg.content} (From **${msg.channel.guild.name}**)`;
 	}
 	var commands = {
 		"+help":sendHelp,
@@ -427,6 +443,10 @@ client.on('message', msg => {
 		checkFooled(msg,30,70);
 	}
 });
+
+client.on("voiceStateUpdate", (oldMember,newMember)=>{
+	checkInVC(newMember)
+})
 
 
 client.login(config.token);
