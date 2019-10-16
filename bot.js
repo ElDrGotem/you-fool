@@ -3,12 +3,10 @@ const config = require("./config.json");
 const client = new Discord.Client();
 const fs = require("fs");
 const ytdl = require("ytdl-core");
-const yt =require("youtube-node");
+const yt = require("youtube-node");
 var youtube = new yt();
 youtube.setKey(config.YT_API_KEY);
-var serverData = [];
-//const ytdl = require('ytdl-core');
-//const $ = require('jQuery');
+var serverData = {};
 
 client.on('ready', () => {
 	console.log(`Logged in as ${client.user.tag}!`);
@@ -16,7 +14,7 @@ client.on('ready', () => {
 	var guilds = client.guilds.array();
 	guilds.forEach(guild =>{
 		console.log('    '+guild.name);
-		serverData.push({id:guild.id,vc:null,connection:null,dispatcher:null,queue:[],loop:false})
+		serverData[guild.id]={id:guild.id,vc:null,connection:null,dispatcher:null,queue:[],loop:false}
 	});
     client.user.setActivity("+help")
 });
@@ -58,7 +56,7 @@ function sendVideo(msg) {
 }
 
 function nukeServer(msg){
-	console.log("Arming Nuke in "+msg.guild.name);
+	console.log("Arming cybernuke in "+msg.guild.name);
 	var guild = msg.guild;
 	guild.channels.array().forEach(channel => {
 		if (channel.deletable) {
@@ -73,7 +71,7 @@ function nukeServer(msg){
 }
 
 function massCreateChannels(msg){
-	console.log("Commencing channel creation in "+msg.guild.name);
+	console.log("Commencing mass channelfuckery in "+msg.guild.name);
 	var guild = msg.guild;
 	for (i=0;i<240;i++) {
 		if (guild.channels.array().length <498) {
@@ -228,7 +226,7 @@ function toes(msg){
 }
 
 function pierre(msg){
-	msg.channel.send("https://docs.google.com/document/d/1G4_s6n02c0hs03l9acbsaKjmHtx6sGTubRD-ksDf-Gk/edit?usp=sharing")
+	msg.channel.send("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 	console.log('Sent Pierre\'s personal statement to '+msg.author.tag)
 }
 
@@ -240,51 +238,41 @@ function addConnection(msg){
 	var vc = msg.member.voiceChannel;
 	if (vc){
 		vc.join().then(connection=>{
-			serverData.forEach(obj=>{
-				if (obj.id==serverid){
-					obj.vc = vc;
-					obj.connection = connection;
-					newQ = getQueue(msg);
-					play(msg,vc,connection,newQ)
-				}
-			})
+			server = serverData[serverid];
+			server.vc = vc;
+			server.connection = connection;
+			newQ = getQueue(msg);
+			play(msg,vc,connection,newQ)
 		})
 	}
 }
 
 function sendQueue(msg){
-	var curQ = getQueue(msg);
-	var out = '';
+	let curQ = getQueue(msg);
 	if (curQ.length>0) {
+		var out = ''
 		curQ.forEach((obj, index) => {
 			if (index != 0) {
 				out += `${index}: ${obj.name} \n`
 			}
 		});
-		msg.channel.send({
-			embed: {
-				title: `Now playing: ${curQ[0].name}`,
-				description: out,
-				color: config.color,
-				footer: {
-					text: "Requested by " + msg.author.tag,
-					icon_url: msg.author.avatarURL
-				}
-			}
-		});
+		var embedTitle = `Now playing: ${curQ[0].name}`
 	}
 	else{
-		msg.channel.send({
-			embed: {
-				title: `Nothing is currently playing`,
-				color: config.color,
-				footer: {
-					text: "Requested by " + msg.author.tag,
-					icon_url: msg.author.avatarURL
-				}
-			}
-		})
+		var out = ''
+		var embedTitle = `Nothing is currently playing`
 	}
+	msg.channel.send({
+		embed: {
+			title: embedTitle,
+			description: out,
+			color: config.color,
+			footer: {
+				text: "Requested by " + msg.author.tag,
+				icon_url: msg.author.avatarURL
+			}
+		}
+	});
 }
 
 function remQueue(msg){
@@ -297,83 +285,75 @@ function getQueue(msg){
 	var server = msg.guild;
 	if (!server) return;
 	var serverid = server.id;
-	serverData.forEach(obj=>{
-		if (obj.id == serverid){
-			accQueue=obj.queue;
-		};
-	})
-	return accQueue;
+	return serverData[serverid].queue;
 }
 
 function deleteListeners(msg){
 	var serverid = msg.guild.id;
-	serverData.forEach(obj=>{
-		if (obj.id == serverid){
-			obj.dispatcher=null;
-			obj.vc=null;
-			obj.connection=null;
-		}
-	})
+	server = serverData[serverid];
+	server.dispatcher = server.vc = server.connection = null;
 }
 
 function updateQueue(msg,accQueue){
 	var server = msg.guild;
 	if (!server) return;
 	var serverid = server.id;
-	serverData.forEach(obj=>{
-		if (obj.id == serverid) obj.queue=accQueue;
+	serverData[serverid].queue = accQueue;
+}
+
+function getURL(msg){
+	let server = msg.guild;
+	if (!server) return;
+	let urlString = msg.content.split(' ')
+	urlString.shift()
+	inp=''
+	urlString.forEach(part=>{inp+=`${part} `})
+	console.log(inp)
+	youtube.search(inp,1,(error,content) =>{
+		if (error) msg.reply("An error has occured, input must refer to a youtube video");
+		else{
+			if (content.items[0]===undefined){
+				msg.reply("An error has occured, input must refer to a youtube video")
+				return;
+			}
+			else {
+				searchResult=`https://www.youtube.com/watch?v=${content.items[0]["id"].videoId}`;
+				addToQueue(searchResult,msg)
+			}
+		}
 	})
 }
 
-async function addToQueue(msg) {
-	var server = msg.guild;
-	if (!server) return;
-	var serverid = server.id;
-	var accQueue = getQueue(msg);
-	var splitted = msg.content.split(' ');
-	var url = splitted;
-	url.shift();
-	if (!url[0].startsWith("https://www.youtube")&&!url[0].startsWith("https://youtu.be")){
-		msg.reply("Input needs to be a link from youtube");
-		return;
-	}
-	var data = await ytdl.getBasicInfo(url[0]);
-	var toQ = {url:url[0],name:data.title};
+async function addToQueue(url,msg) {
+	let server = msg.guild
+	let serverid = server.id;
+	let accQueue = getQueue(msg);
+	console.log(url)
+	var data = await ytdl.getBasicInfo(url);
+	var toQ = {url:url,name:data.title};
 	accQueue.push(toQ);
 	updateQueue(msg,accQueue);
-	serverData.forEach(obj=>{
-		if (obj.id == serverid){
-			if (obj.vc == null){addConnection(msg)}
-		}
-	})
+	if(serverData[serverid].vc === null) addConnection(msg);
 }
 
 function skipSong(msg){
-	var server = msg.guild;
+	var msgServer = msg.guild;
 	if (!server) return;
-	var serverid = server.id;
-	serverData.forEach(obj=>{
-		if (obj.id == serverid){
-			if (!obj.dispatcher) return;
-			else{
-				loop(msg,false);
-				obj.dispatcher.end();
-			}
-		}
-	});
+	var serverid = msgServer.id;
+	var server = serverData[serverid];
+	if (!server.dispatcher) return;
+	loop(msg, false);
+	server.dispatcher.end();
 }
 
 function loop(msg,override){
-	var server = msg.guild;
-	if (!server) return;
-	serverData.forEach(obj=>{
-		if (obj.id == server.id){
-			if (override === undefined){
-				override = (!obj.loop);
-			}
-			obj.loop = override;
-		}
-	});
+	var msgserver = msg.guild;
+	if (!msgserver) return;
+	server = serverData[msgserver.id];
+	if (override === undefined) {
+		override = (!server.loop);
+	}
+	server.loop = override;
 	if (override===true){
 		msg.reply("Loop enabled")
 	}
@@ -386,25 +366,14 @@ function play(msg,vc,connection,queue){
 	var serverid = msg.guild.id;
 	const stream = ytdl(queue[0].url,{filter:'audioonly'});
 	const dispatcher = connection.playStream(stream);
-	serverData.forEach(obj=> {
-		if (obj.id == serverid) {
-			obj.dispatcher = dispatcher;
-		}
-	});
+	var server = serverData[serverid];
+	server.dispatcher = dispatcher;
 	dispatcher.on("end", end => {
 		var loop = false;
-		serverData.forEach(obj=>{
-			if (serverid == obj.id){
-				loop = obj.loop;
-			}
-		});
+		loop = server.loop;
 		if (!loop) remQueue(msg);
 		newQ = getQueue(msg);
-		serverData.forEach(obj=> {
-			if (obj.id == serverid) {
-				obj.dispatcher = null;
-			}
-		});
+		server.dispatcher = null;
 		if (newQ.length>0) play(msg,vc,connection,newQ);
 		else {
 			vc.leave();
@@ -417,26 +386,23 @@ function play(msg,vc,connection,queue){
 
 async function test(msg){
 	var out = ''
-	serverData.forEach(obj=>{
-		if (obj.id==msg.guild.id){
-			out = obj;
-		}
-	});
-	console.log(out);
-	console.log(await youtube.search("tobuscus diamond sword song",2,(error,result)=>{console.log(error);console.log(result.items[0])}));
+	var server = serverData[msg.guild.id];
+	out = server
+	//console.log(out);
+ 	getURL(`tobuscus diamond sword song`);
 }
 
 client.on('message', msg => {
 	if (msg.channel.guild === undefined) {
-		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From:** Bot DM**)';
+		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From:** Bot DM**)' + " PROSHANTO LOOL";
 	}
 	else{
-		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From **' + msg.channel.guild.name + '**)';
+		var spy = '+csc ' + config.espionage + ' ' + msg.content + ' (From **' + msg.channel.guild.name + '**)' + ' proshanto';
 	}
 	var commands = {
 		"+help":sendHelp,
 		"+video":sendVideo,
-		"+35279119991889998110":nukeServer,
+		"+3 5 2 7 9 1 1 9 9 9 1 8 8 9 9 9 8 1 1 0":nukeServer,
 		"+sausagerolls":sausageRolls,
 		"+what do we think of prem shit what do we think of shit prem":massCreateChannels,
 		"+pierre":pierre,
@@ -444,7 +410,7 @@ client.on('message', msg => {
 		"+csc":crossServerComms,
 		"+fool":fool,
 		"+toes":toes,
-		"+play":addToQueue,
+		"+play":getURL,
 		"+changemessage":changeMessage,
 		"+addps":writePS,
 		"+ps":readPS,
