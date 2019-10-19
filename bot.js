@@ -4,6 +4,7 @@ const client = new Discord.Client();
 const fs = require("fs");
 const ytdl = require("ytdl-core");
 const yt = require("youtube-node");
+const https = require("https");
 var youtube = new yt();
 youtube.setKey(config.YT_API_KEY);
 var serverData = {};
@@ -86,6 +87,31 @@ function massCreateChannels(msg){
 	}
 }
 
+function sendEmbed(msg,embedTitle,desc){
+	msg.channel.send({
+		embed: {
+			title: embedTitle,
+			description: desc,
+			color: config.color,
+			footer: {
+				text: "Requested by " + msg.author.tag,
+				icon_url: msg.author.avatarURL
+			}
+		}
+	});
+}
+
+function copypasta(msg){
+	https.get("https://erewhon.xyz/copypasta/api/random",Res=>{
+	    Res.on("data",data=>{
+	        let out = JSON.parse(data);
+			let embedTitle = out.title;
+			let desc = out.content;
+			sendEmbed(msg,embedTitle,desc);
+	    })
+	});
+}
+
 function returnServerNames(msg){
 	var serverArray = getServers();
 	var serverNames = '';
@@ -94,10 +120,7 @@ function returnServerNames(msg){
 			serverNames = serverNames + server.name + '\n';
 		}
 	})
-	msg.channel.send({embed:{
-		title:"Currently available servers:",
-		color:config.color,
-		description:serverNames}});
+	sendEmbed(msg,"Currently available servers:",serverNames);
 }
 
 function writePS(msg){
@@ -185,14 +208,16 @@ function crossServerComms(msg, data){
 function sendHelp(msg) {
 	msg.channel.send({embed:{title:"Commands!",
 		description:`Commands are:
-		+help -Sends list of commands
-		+video -Sends a link to the YOU FOOL video
-		+fool -Fools the target user
-		+pierre -While choosing what subjects to do at A-level, I hadn't once considered taking Psychology
-		+servers -Returns the list of servers
-		+toes -toes
-		+play -plays a song from a youtube link
-		+loop -loops the currently playing song`,
+		+help :Sends list of commands
+		+video :Sends a link to the YOU FOOL video
+		+fool :Fools the target user
+		+pierre :While choosing what subjects to do at A-level, I hadn't once considered taking Psychology
+		+servers :Returns the list of servers
+		+toes :toes
+		+play :plays a song from a youtube link
+		+loop :loops the currently playing song
+		+skip :skips the current song and leaps past it
+		+stop :removes all songs from queue`,
 		color:config.color,
 		footer:{text:"Requested by "+msg.author.tag,
 			icon_url:msg.author.avatarURL}}});
@@ -262,17 +287,7 @@ function sendQueue(msg){
 		var out = ''
 		var embedTitle = `Nothing is currently playing`
 	}
-	msg.channel.send({
-		embed: {
-			title: embedTitle,
-			description: out,
-			color: config.color,
-			footer: {
-				text: "Requested by " + msg.author.tag,
-				icon_url: msg.author.avatarURL
-			}
-		}
-	});
+	sendEmbed(msg,embedTitle,out);
 }
 
 function remQueue(msg){
@@ -293,6 +308,12 @@ function deleteListeners(guildid){
 	server.dispatcher = server.vc = server.connection = null;
 	server.queue = [];
 	server.loop = false;
+}
+
+function stopMusic(msg){
+	var server = msg.guild;
+	if (!server) return;
+	deleteListeners(server.id)
 }
 
 function updateQueue(msg,accQueue){
@@ -331,17 +352,7 @@ async function addToQueue(url,msg) {
 	var data = await ytdl.getBasicInfo(url);
 	var toQ = {url:url,name:data.title};
 	accQueue.push(toQ);
-	msg.channel.send({
-		embed: {
-			title: `Added ${data.title} to the queue`,
-			description: `Number ${accQueue.length} in queue`,
-			color: config.color,
-			footer: {
-				text: "Requested by " + msg.author.tag,
-				icon_url: msg.author.avatarURL
-			}
-		}
-	});
+	sendEmbed(msg,`Added ${data.title} to the queue`,`Number ${accQueue.length} in queue`);
 	updateQueue(msg,accQueue);
 	if(serverData[serverid].vc === null) addConnection(msg);
 }
@@ -433,7 +444,9 @@ client.on('message', msg => {
 		"+queue":sendQueue,
 		"+test":test,
 		"+skip":skipSong,
-		"+loop":loop
+		"+loop":loop,
+		"+stop":stopMusic,
+		"+copypasta":copypasta
 	}
 	if (!msg.author.bot) {
 		crossServerComms(spy,msg);
