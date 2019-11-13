@@ -8,18 +8,151 @@ const https = require("https");
 var youtube = new yt();
 youtube.setKey(config.YT_API_KEY);
 var serverData = {};
+var userData = {};
 
-client.on('ready', () => {
+client.on('ready',()=>{
 	console.log(`Logged in as ${client.user.tag}!`);
 	console.log(`Available in ${client.guilds.array().length} servers!`);
 	var guilds = client.guilds.array();
-	guilds.forEach(guild =>{
+	guilds.forEach(async guild =>{
 		console.log('    '+guild.name);
-		serverData[guild.id]={id:guild.id,vc:null,connection:null,dispatcher:null,queue:[],loop:false}
+		createServerInfo(guild);
+		findExclusion(guild);
 	});
     client.user.setActivity("+help")
+	exclusionConfig();
 });
 
+function createServerInfo(guild){
+	serverData[guild.id]={id:guild.id,vc:null,connection:null,dispatcher:null,queue:[],loop:false,ez:undefined};
+	createSpyChannel(guild);
+}
+
+function createSpyChannel(guild){
+	let spyguild = client.guilds.array().filter(obj=>{return obj.id==config.espionage})[0]
+	let found = false
+	spyguild.channels.array().forEach(chan=>{
+		if (chan.name == guild.id) found = true;
+	})
+	if (!found){
+		spyguild.createChannel(guild.id,{type:"text"});
+	}
+}
+
+function writePS(msg){
+	var flag = false;
+	let msgPart = msg.content.split(" ");
+	if (msgPart[2] === undefined||msg.mentions.users.array()[0] === undefined){
+		console.log("Bad PS request");
+		msg.reply("Incorrect syntax");
+		return
+	}
+	if (msgPart[2].startsWith("https://")==false){
+		msg.reply("Bad link, cannot add to database")
+		return
+	}
+	let user = msg.mentions.users.array()[0].id;
+	let file = fs.readFileSync("./personalStatements.json","utf8");
+	let obj = JSON.parse(file);
+	obj[user] = msgPart[2];
+	file = JSON.stringify(obj);
+	void fs.writeFile("./personalStatements.json",file,err=>{console.log(err)});
+	console.log("Added personal statement to JSON")
+	msg.reply("Added to personal statement database")
+}
+
+function readPS(msg){
+	if (msg.mentions.users.array()[0] === undefined){
+		console.log("Bad PS request");
+		msg.reply("Incorrect syntax, user not tagged");
+		return
+	}
+	let user = msg.mentions.users.array()[0].id;
+	let file = fs.readFileSync("./personalStatements.json","utf8");
+	let obj = JSON.parse(file);
+	if (obj[user] === undefined){
+		msg.reply("Personal statement does not exist, add using +addps");
+		return
+	}
+	else{
+		msg.reply(obj[user])
+	}
+}
+
+function addInclusion(msg){
+	if (!msg.mentions.members.array()[0]) return;
+	let mention = msg.mentions.members.array()[0];
+	let server = msg.guild;
+	if (!server) return;
+	delete userData[mention.id][server.id];
+}
+
+function exclusionConfig(){
+	let file = fs.readFileSync(`./ez.json`,`utf8`);
+	let obj = JSON.parse(file);
+	let guilds = client.guilds.array();
+	guilds.forEach(guild=>{
+		if (obj[guild.id]){
+			serverData[guild.id].ez=guild.channels.array().filter(chan=>{return chan.id==obj[guild.id]})[0]
+		}
+	})
+}
+
+function configureExclusion(msg){
+	let name = msg.content.substr(msg.content.indexOf(" ")+1);
+	let chanid = undefined;
+	msg.guild.channels.array().forEach(chan=>{
+		if (chan.type=="voice"&&chan.name==name) chanid = chan.id;
+	})
+	let file = fs.readFileSync(`./ez.json`,`utf8`);
+	let obj = JSON.parse(file);
+	obj[msg.guild.id]=chanid;
+	file = JSON.stringify(obj);
+	fs.writeFile("./ez.json",file,err=>{console.log(err)});
+	exclusionConfig();
+}
+
+function findExclusion(guild){
+	let out = undefined
+	let channels = guild.channels.array().sort((a,b)=>{return a.position-b.position})
+	channels.forEach(chan=>{
+		if (chan.type=="voice"&&(chan.name.toLowerCase().includes("exclusion")||chan.name.toLowerCase().includes("zone"))){
+			out = chan;
+		}
+	})
+	serverData[guild.id].ez = out;
+	if (out){
+		console.log("	EZ found, "+out.name);
+	}
+}
+function mov(user,vc){
+	user.setVoiceChannel(vc)
+}
+
+function addExclusion(msg){
+	if (!msg.mentions.members.array()[0]) return;
+	let mention = msg.mentions.members.array()[0];
+	if (mention.id == client.user.id){
+		msg.channel.send("imagine attempting to exclude the best discord bot");
+		checkFooled(msg,50,50)
+		return null
+	}
+	let server = msg.guild.id;
+	if (!serverData[server].ez) return msg.reply("This server does not have an exclusion zone")
+	userData[mention.id]={};
+	userData[mention.id][server]=serverData[server].ez;
+	let ezvc = userData[mention.id][server]
+	mov(mention,ezvc)
+}
+function checkExcluded(user){
+	let server = user.guild;
+	let ez = serverData[server.id].ez;
+	if (!user.voiceChannel) return;
+	if (user.voiceChannel===ez) return;
+	if (!userData[user.id]) return;
+	if (!userData[user.id][server.id]) return;
+	else{mov(user,ez)}
+}
 
 function checkFooled(msg,min,max,foolid,foolname) {
 	if (foolid === undefined) {
@@ -101,6 +234,12 @@ function sendEmbed(msg,embedTitle,desc){
 	});
 }
 
+function say(msg){
+	let thing = msg.content.split(' ');
+	thing.shift();
+	msg.channel.send(thing.join(' '));
+}
+
 function copypasta(msg){
 	https.get("https://erewhon.xyz/copypasta/api/random",Res=>{
 	    Res.on("data",data=>{
@@ -112,62 +251,41 @@ function copypasta(msg){
 	});
 }
 
+/*function findXur(msg){
+	let options = {
+		hostname: "bungie.net",
+		path:"/Platform/Destiny2/vendors",
+		method:"GET",
+		headers:{
+			Key:"X-API-KEY",
+			Value: "6f1826be8c874053ab0c9abbf490d698"
+		}
+	}
+	https.request(options,Res=>{
+		Res.on("data",data=>{
+			let out = JSON.parse(data)
+			console.log(out)
+			msg.reply(out)
+		})
+	}).on("error",error=>{console.log(error)})
+}*/
+
 function returnServerNames(msg){
 	var serverArray = getServers();
 	var serverNames = '';
 	serverArray.forEach(server =>{
-		if (server.name != config.espionage) {
+		if (server.id != config.espionage) {
 			serverNames = serverNames + server.name + '\n';
 		}
 	})
 	sendEmbed(msg,"Currently available servers:",serverNames);
 }
 
-function writePS(msg){
-	var flag = false;
-	let msgPart = msg.content.split(" ");
-	if (msgPart[2] === undefined||msg.mentions.users.array()[0] === undefined){
-		console.log("Bad PS request");
-		msg.reply("Incorrect syntax");
-		return
-	}
-	if (msgPart[2].startsWith("https://")==false){
-		msg.reply("Bad link, cannot add to database")
-		return
-	}
-	let user = msg.mentions.users.array()[0].id;
-	var file = fs.readFileSync("./personalStatements.json","utf8");
-	let obj = JSON.parse(file);
-	obj[user] = msgPart[2];
-	file = JSON.stringify(obj);
-	void fs.writeFile("./personalStatements.json",file,err=>{console.log(err)});
-	console.log("Added personal statement to JSON")
-	msg.reply("Added to personal statement database")
-}
-
-function readPS(msg){
-	if (msg.mentions.users.array()[0] === undefined){
-		console.log("Bad PS request");
-		msg.reply("Incorrect syntax, user not tagged");
-		return
-	}
-	let user = msg.mentions.users.array()[0].id;
-	var file = fs.readFileSync("./personalStatements.json","utf8");
-	let obj = JSON.parse(file);
-	if (obj[user] === undefined){
-		msg.reply("Personal statement does not exist, add using +addps");
-		return
-	}
-	else{
-		msg.reply(obj[user])
-	}
-}
-
 function getServers(){
 	return client.guilds.array();
 }
 
-function crossServerComms(msg, data){
+function crossServerComms(msg, data, guildid){
 	var voice = false;
 	var serverArray = getServers();
 	if (data === undefined){
@@ -188,10 +306,10 @@ function crossServerComms(msg, data){
 		i +=1;
 	});
 	serverArray.forEach(server =>{
-		if (server.name.startsWith(queryName)){
+		if (server.id==queryName){
 			var flag = true;
 			server.channels.array().forEach(channel =>{
-				if (channel.type == "text"){
+				if (channel.type == "text"&&channel.name==guildid){
 					if (flag) {
 						channel.send(message);
 						if (voice == true) {
@@ -203,6 +321,10 @@ function crossServerComms(msg, data){
 			})
 		}
 	})
+}
+
+function joke(msg) {
+	msg.channel.send("Saksham\'s bot is better than Joe\'s");
 }
 
 function sendHelp(msg) {
@@ -313,7 +435,8 @@ function deleteListeners(guildid){
 function stopMusic(msg){
 	var server = msg.guild;
 	if (!server) return;
-	deleteListeners(server.id)
+	serverData[server.id].vc.leave();
+	deleteListeners(server.id);
 }
 
 function updateQueue(msg,accQueue){
@@ -322,10 +445,14 @@ function updateQueue(msg,accQueue){
 	var serverid = server.id;
 	serverData[serverid].queue = accQueue;
 }
+function getID(msg){
+	msg.reply(msg.author.id)
+}
 
 function getURL(msg){
 	let server = msg.guild;
 	if (!server) return;
+	if (!msg.member.voiceChannel) return;
 	let urlString = msg.content.split(' ')
 	urlString.shift()
 	inp=''
@@ -339,10 +466,14 @@ function getURL(msg){
 			}
 			else {
 				searchResult=`https://www.youtube.com/watch?v=${content.items[0]["id"].videoId}`;
-				addToQueue(searchResult,msg)
-			}//
+				addToQueue(searchResult,msg);
+			}
 		}
 	})
+}
+
+function sleep(ms){
+	return new Promise(resolve=>{setTimeout(resolve,ms)})
 }
 
 async function addToQueue(url,msg) {
@@ -354,7 +485,12 @@ async function addToQueue(url,msg) {
 	accQueue.push(toQ);
 	sendEmbed(msg,`Added ${data.title} to the queue`,`Number ${accQueue.length} in queue`);
 	updateQueue(msg,accQueue);
-	if(serverData[serverid].vc === null) addConnection(msg);
+	if(serverData[serverid].vc === null){
+		if (client.user.id === 2589932777046016){
+			await sleep(30000);
+		}
+		addConnection(msg);
+	}
 }
 
 function skipSong(msg){
@@ -415,8 +551,9 @@ async function play(msg,vc,connection,queue){
 }
 
 async function test(msg){
-	var out = ''
-	console.log(serverData[msg.guild.id])
+	msg.guild.channels.forEach(chan=>{
+		if (chan.type!="voice") console.log(chan.position,chan.name,chan.id);
+	})
 }
 
 client.on('message', msg => {
@@ -446,10 +583,19 @@ client.on('message', msg => {
 		"+skip":skipSong,
 		"+loop":loop,
 		"+stop":stopMusic,
-		"+copypasta":copypasta
+		"+copypasta":copypasta,
+		"+echo":say,
+		"+getid":getID,
+		"+joke":joke,
+		"+exclude":addExclusion,
+		"+include":addInclusion,
+		"+exclusionzone":configureExclusion
+		//"+xur":findXur
 	}
-	if (!msg.author.bot) {
-		crossServerComms(spy,msg);
+	if (!msg.author.bot&&msg.author.id!=client.user.id) {
+		crossServerComms(spy,msg,msg.guild.id);
+	}
+	if (!msg.author.bot){
 		for (var call in commands){
 			if (msg.content.startsWith(call)) commands[call](msg);
 		}
@@ -458,8 +604,18 @@ client.on('message', msg => {
 });
 
 client.on("voiceStateUpdate", (oldMember,newMember)=>{
-	checkInVC(newMember)
+	checkInVC(newMember);
+	checkExcluded(newMember);
 })
 
+client.on("channelCreate",channel=>{
+	findExclusion(channel.guild);
+})
+
+client.on("guildCreate",async guild=>{
+	await sleep(1000)
+	createServerInfo(guild)
+	console.log(`new guild available, ${guild.name}`)
+})
 
 client.login(config.token);
